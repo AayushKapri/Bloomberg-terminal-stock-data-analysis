@@ -1,0 +1,207 @@
+---
+title: "data replication"
+author: "Aayush"
+date: "2024-06-24"
+output: html_document
+---
+
+
+```{r}
+library(pacman)
+pacman::p_load(tidyverse)
+
+```
+
+```{r setup, include=FALSE}
+# Install and load the readxl package
+library(readxl)
+
+# Specify the path to your Excel file
+file_path <- "C:\\Users\\Aayush\\Documents\\dr. moore stock project\\excel files\\Liquidity.xlsx"
+
+# List all sheet names in the Excel file
+sheet_names <- excel_sheets(file_path)
+
+# Read all sheets into a list of data frames
+data <- lapply(sheet_names, function(sheet) {
+  read_excel(file_path, sheet = sheet, col_names = FALSE)
+})
+
+# Optionally, name each element of the list with the corresponding sheet name
+names(data) <- sheet_names
+
+# View the list of data frames
+print(data)
+
+```
+
+
+
+```{r, include=FALSE}
+
+# Creating the parameters data frame
+parameters <- data.frame(
+  Parameter = c("WeightHigh1", "WeightLow1", "WeightOpen1", "WeightClose1",
+                "WeightHigh2", "WeightLow2", "WeightOpen2", "WeightClose2",
+                "BuyMax", "SellMin"),
+  Value = c(0.1, 0.1, 0.1, 0.2, 0.1, 0.1, 0.1, 0.2, -1, 1)
+)
+
+# Display the data frame
+print(parameters)
+
+
+```
+
+
+```{r pressure, echo=FALSE}
+# Initialize a blank data frame for the result
+price <- as.data.frame(matrix(0, nrow=nrow(data$High), ncol=ncol(data$High)))
+colnames(price) <- colnames(data$High)
+
+# Copy the first row of data$High to the first row of price
+price[1, ] <- data$High[1, ]
+
+# Perform the calculation for each row, starting from the second row
+for (i in 2:nrow(data$High)) {
+  price[i, ] <- parameters$Value[parameters$Parameter == "WeightHigh1"] * data$High[i, ] +
+                parameters$Value[parameters$Parameter == "WeightLow1"] * data$Low[i, ] +
+                parameters$Value[parameters$Parameter == "WeightOpen1"] * data$Open[i, ] +
+                parameters$Value[parameters$Parameter == "WeightClose1"] * data$Close[i, ] +
+                parameters$Value[parameters$Parameter == "WeightHigh2"] * data$High[i-1, ] +
+                parameters$Value[parameters$Parameter == "WeightLow2"] * data$Low[i-1, ] +
+                parameters$Value[parameters$Parameter == "WeightOpen2"] * data$Open[i-1, ] +
+                parameters$Value[parameters$Parameter == "WeightClose2"] * data$Close[i-1, ]
+}
+
+# Set the first row to NA to indicate it's intentionally left empty
+price[1, ] <- NA
+
+
+# Display the resulting price data frame
+print(price)
+
+```
+
+
+```{r}
+#return
+# Initialize a blank data frame for the result
+return <- as.data.frame(matrix(0, nrow=nrow(data$High)-1, ncol=ncol(data$High)))
+colnames(return) <- colnames(data$High)
+
+# Perform the calculation for each row
+for (i in 3:nrow(data$High)) {
+  return[i, ] <- 100 * (((data$Close[i, ])-price[i-1, ])/price[i-1, ])
+}
+
+# Display the resulting price data frame
+print(return)
+
+```
+
+```{r}
+#signal
+# Initialize a blank data frame for the result
+signal <- as.data.frame(matrix(0, nrow=nrow(data$High)-1, ncol=ncol(data$High)))
+colnames(signal) <- colnames(data$High)
+
+# Perform the calculation for each row
+for (i in 3:nrow(data$High)) {
+  signal[i, ] <- (10000000 * return[i,])/(data$Close[i, ]*data$Volume[i, ])
+}
+
+# Display the resulting price data frame
+print(signal)
+
+```
+
+```{r}
+#closeclosereturn
+# Initialize a blank data frame for the result
+close_close_return <- as.data.frame(matrix(0, nrow=nrow(data$High)-1, ncol=ncol(data$High)))
+colnames(close_close_return) <- colnames(data$High)
+
+# Perform the calculation for each row
+for (i in 2:nrow(data$High)) {
+  close_close_return[i, ] <- 100*((data$Close[i, ]-data$Close[i-1, ])/data$Close[i-1, ])
+}
+
+# Display the resulting price data frame
+print(close_close_return)
+```
+
+
+
+
+```{r}
+#Buy
+# Initialize a blank data frame for the result
+buy <- as.data.frame(matrix(0, nrow=nrow(data$High), ncol=ncol(data$High)))
+colnames(buy) <- colnames(data$High)
+
+# Perform the calculation for each row
+for (i in 3:nrow(data$High)) {
+  buy[i, ] <- ifelse(signal[i, ] < parameters$Value[parameters$Parameter == "BuyMax"], 1, 0)
+}
+
+print(buy)
+```
+
+
+```{r}
+#Sell
+# Initialize a blank data frame for the result
+sell <- as.data.frame(matrix(0, nrow=nrow(data$High), ncol=ncol(data$High)))
+colnames(sell) <- colnames(data$High)
+
+# Perform the calculation for each row
+for (i in 3:nrow(data$High)) {
+  sell[i, ] <- ifelse(signal[i, ] > parameters$Value[parameters$Parameter == "SellMin"], 1, 0)
+}
+
+print(sell)
+
+```
+
+```{r}
+# Assuming 'buy' and 'close_close_return' are data frames with the same dimensions
+
+# Initialize the PNL data frame with a Long_Return column
+PNL <- data.frame(Long_Return = numeric(nrow(buy)),
+                  Short_Return = numeric(nrow(buy)),
+                  Strategy_Return = numeric(nrow(buy)))
+
+# Perform the calculation for each row starting from the 3rd row
+for (i in 3:nrow(buy)) {
+  PNL$Long_Return[i] <- sum(buy[i, ] * close_close_return[i+1, ])/sum(buy[i, ])
+  PNL$Short_Return[i] <- sum(sell[i, ] * close_close_return[i+1, ])/sum(sell[i, ])
+  PNL$Strategy_Return[i] <- PNL$Long_Return[i] - PNL$Short_Return[i]
+}
+
+
+# Remove the first two and the last row from the PNL data frame
+PNL <- PNL[-c(1, 2, nrow(PNL)), ]
+
+# Display the resulting PNL data frame
+print(PNL)
+
+```
+
+
+```{r}
+
+# Assuming PNL$Strategy_Return is already defined
+
+# Calculate the Sharpe ratio
+Sharpe_ratio <- 16 * mean(PNL$Strategy_Return, na.rm = TRUE) / sd(PNL$Strategy_Return, na.rm = TRUE)
+
+# Print the Sharpe ratio
+cat("Sharpe Ratio is:", Sharpe_ratio, "\n")
+
+
+# Print the Annual win probability
+cat("Annual Win probability:", pnorm(Sharpe_ratio), "\n")
+
+
+```

@@ -1,0 +1,433 @@
+---
+title: "new parameters for first three days"
+author: "Aayush"
+date: "2024-08-04"
+output: html_document
+---
+
+```{r}
+library(pacman)
+pacman::p_load(tidyverse, readxl)
+
+# File paths
+file_path_equity <- "C:\\Users\\Aayush\\Documents\\dr. moore stock project\\\\excel files\\DailyDataV1.csv"
+file_path_no_equity <- "C:\\Users\\Aayush\\Documents\\dr. moore stock project\\excel files\\fakedata_no_equity_row - Copy.xlsx"
+
+# Read data
+data_equity <- read_csv(file_path_equity, col_names = FALSE)
+data_no_equity <- read_excel(file_path_no_equity)
+
+# Extract equity names
+equity_names <- as.character(data_equity[1, -1])
+equity_names <- na.omit(equity_names)
+
+# Prepare Dates and data
+dates <- data_no_equity[, 1]
+data_equity <- data_equity[-c(1, 2), -1]
+
+# Initialize dataframes
+open_df <- data.frame(Dates = dates)
+last_price_df <- data.frame(Dates = dates)
+px_high_df <- data.frame(Dates = dates)
+px_low_df <- data.frame(Dates = dates)
+volume_df <- data.frame(Dates = dates)
+
+# Number of columns per equity
+columns_per_equity <- 5
+
+# Loop through each equity and create separate dataframes
+for (i in 1:length(equity_names)) {
+  start_col <- (i - 1) * columns_per_equity + 1
+  end_col <- start_col + columns_per_equity - 1
+
+  equity_data <- data_equity[, start_col:end_col]
+  equity_data <- cbind(dates, equity_data)
+  colnames(equity_data) <- c("Dates", "OPEN", "LAST_PRICE", "PX_HIGH_ALL_SESSION", "PX_LOW_ALL_SESSION", "VOLUME")
+
+  # Convert relevant columns to numeric
+  equity_data$OPEN <- as.numeric(equity_data$OPEN)
+  equity_data$LAST_PRICE <- as.numeric(equity_data$LAST_PRICE)
+  equity_data$PX_HIGH_ALL_SESSION <- as.numeric(equity_data$PX_HIGH_ALL_SESSION)
+  equity_data$PX_LOW_ALL_SESSION <- as.numeric(equity_data$PX_LOW_ALL_SESSION)
+  equity_data$VOLUME <- as.numeric(equity_data$VOLUME)
+  
+  
+
+  # Ensure there are no missing values in the subsetting operations
+  # Replace rows where Volume is less than or equal to 0 with NA (excluding Dates)
+  equity_data[!is.na(equity_data$VOLUME) & equity_data$VOLUME <= 0, 2:6] <- NA
+
+  # Replace rows where PX_HIGH_ALL_SESSION is less than PX_LOW_ALL_SESSION with NA (excluding Dates)
+  equity_data[!is.na(equity_data$PX_HIGH_ALL_SESSION) & !is.na(equity_data$PX_LOW_ALL_SESSION) & 
+                equity_data$PX_HIGH_ALL_SESSION < equity_data$PX_LOW_ALL_SESSION, 2:6] <- NA
+
+  # Replace rows where PX_HIGH_ALL_SESSION / LAST_PRICE > 1.9 with NA (excluding Dates)
+  equity_data[!is.na(equity_data$PX_HIGH_ALL_SESSION) & !is.na(equity_data$LAST_PRICE) & 
+                (equity_data$PX_HIGH_ALL_SESSION / equity_data$LAST_PRICE) > 1.9, 2:6] <- NA
+
+  # Replace rows where LAST_PRICE / PX_LOW_ALL_SESSION < 1.9 with NA (excluding Dates)
+  equity_data[!is.na(equity_data$LAST_PRICE) & !is.na(equity_data$PX_LOW_ALL_SESSION) & 
+                (equity_data$LAST_PRICE / equity_data$PX_LOW_ALL_SESSION) > 1.9, 2:6] <- NA
+  
+  
+
+  # Add the relevant columns to the respective dataframes
+  open_df[[equity_names[i]]] <- equity_data$OPEN
+  last_price_df[[equity_names[i]]] <- equity_data$LAST_PRICE
+  px_high_df[[equity_names[i]]] <- equity_data$PX_HIGH_ALL_SESSION
+  px_low_df[[equity_names[i]]] <- equity_data$PX_LOW_ALL_SESSION
+  volume_df[[equity_names[i]]] <- equity_data$VOLUME
+}
+
+# # Remove column names
+# colnames(open_df) <- NULL
+# colnames(last_price_df) <- NULL
+# colnames(px_high_df) <- NULL
+# colnames(px_low_df) <- NULL
+# colnames(volume_df) <- NULL
+
+# Remove Dates columns
+open_df <- open_df[, -1]
+last_price_df <- last_price_df[, -1]
+px_high_df <- px_high_df[, -1]
+px_low_df <- px_low_df[, -1]
+volume_df <- volume_df[, -1]
+
+
+# Display the first few rows of each dataframe
+print(open_df)
+print(last_price_df)
+print(px_high_df)
+print(px_low_df)
+print(volume_df)
+
+```
+
+
+```{r}
+
+# Creating the new parameters "price weights" for first three terms
+parameters <- data.frame(
+  Parameter = c("WeightHigh1", "WeightLow1", "WeightOpen1", "WeightClose1",
+                "WeightHigh2", "WeightLow2", "WeightOpen2", "WeightClose2",
+                "WeightHigh3", "WeightLow3", "WeightOpen3", "WeightClose3",
+                "WeightHigh4", "WeightLow4", "WeightOpen4", "WeightClose4",
+                "WeightHigh5", "WeightLow5", "WeightOpen5", "WeightClose5",
+                "BuyMax", "SellMin"),
+  Value = c(1, 0, 0, 0, 
+            0, 0, 0, 0,
+            0, 0, 0, 0,
+            0, 0, 0, 0,
+            0, 0, 0, 0,
+            -1, 1)
+)
+
+
+# Display the data frame
+print(parameters)
+```
+
+
+
+
+```{r}
+# Initialize a blank data frame for the result
+price <- as.data.frame(matrix(0, nrow = nrow(px_high_df), ncol = ncol(px_high_df)))
+colnames(price) <- colnames(px_high_df)
+
+# Set the first row to NA to indicate it's intentionally left empty
+price[1, ] <- NA
+
+# Retrieve parameter values for the first five days
+
+# Day 1
+w_high1 <- parameters$Value[parameters$Parameter == "WeightHigh1"]
+w_low1 <- parameters$Value[parameters$Parameter == "WeightLow1"]
+w_open1 <- parameters$Value[parameters$Parameter == "WeightOpen1"]
+w_close1 <- parameters$Value[parameters$Parameter == "WeightClose1"]
+
+# Day 2
+w_high2 <- parameters$Value[parameters$Parameter == "WeightHigh2"]
+w_low2 <- parameters$Value[parameters$Parameter == "WeightLow2"]
+w_open2 <- parameters$Value[parameters$Parameter == "WeightOpen2"]
+w_close2 <- parameters$Value[parameters$Parameter == "WeightClose2"]
+
+# Day 3
+w_high3 <- parameters$Value[parameters$Parameter == "WeightHigh3"]
+w_low3 <- parameters$Value[parameters$Parameter == "WeightLow3"]
+w_open3 <- parameters$Value[parameters$Parameter == "WeightOpen3"]
+w_close3 <- parameters$Value[parameters$Parameter == "WeightClose3"]
+
+# Day 4
+w_high4 <- parameters$Value[parameters$Parameter == "WeightHigh4"]
+w_low4 <- parameters$Value[parameters$Parameter == "WeightLow4"]
+w_open4 <- parameters$Value[parameters$Parameter == "WeightOpen4"]
+w_close4 <- parameters$Value[parameters$Parameter == "WeightClose4"]
+
+# Day 5
+w_high5 <- parameters$Value[parameters$Parameter == "WeightHigh5"]
+w_low5 <- parameters$Value[parameters$Parameter == "WeightLow5"]
+w_open5 <- parameters$Value[parameters$Parameter == "WeightOpen5"]
+w_close5 <- parameters$Value[parameters$Parameter == "WeightClose5"]
+
+
+# Perform the calculation using vectorized operations
+price[-c(1,2,3,4), ] <- w_high1 * px_high_df[-c(1,2,3,4), ] +    
+               w_low1 * px_low_df[-c(1,2,3,4), ] +
+               w_open1 * open_df[-c(1,2,3,4), ] +
+               w_close1 * last_price_df[-c(1,2,3,4), ] +
+  
+               w_high2 * px_high_df[-c(1,2,3,nrow(px_high_df)), ] +
+               w_low2 * px_low_df[-c(1,2,3,nrow(px_low_df)), ] +
+               w_open2 * open_df[-c(1,2,3,nrow(open_df)), ] +
+               w_close2 * last_price_df[-c(1,2,3,nrow(last_price_df)), ]+
+  
+               w_high3 * px_high_df[-c(1,2,nrow(px_high_df) - 1,nrow(px_high_df)), ] +
+               w_low3 * px_low_df[-c(1,2,nrow(px_low_df) - 1,nrow(px_low_df)), ] +
+               w_open3 * open_df[-c(1,2,nrow(open_df) - 1,nrow(open_df)), ] +
+               w_close3 * last_price_df[-c(1,2,nrow(last_price_df) - 1,nrow(last_price_df)), ]+
+  
+  
+               w_high4 * px_high_df[-c(1,nrow(px_high_df) - 2,nrow(px_high_df) - 1,nrow(px_high_df)), ] +
+               w_low4 * px_low_df[-c(1,nrow(px_low_df) - 2,nrow(px_low_df) - 1,nrow(px_low_df)), ] +
+               w_open4 * open_df[-c(1,nrow(open_df) - 2,nrow(open_df) - 1,nrow(open_df)), ] +
+               w_close4 * last_price_df[-c(1,nrow(last_price_df) - 2,nrow(last_price_df) - 1,nrow(last_price_df)), ]+
+                
+               w_high5 * px_high_df[-c(nrow(px_high_df) - 3,nrow(px_high_df) - 2,nrow(px_high_df) - 1,nrow(px_high_df)), ] +
+               w_low5 * px_low_df[-c(nrow(px_low_df) - 3,nrow(px_low_df) - 2,nrow(px_low_df) - 1,nrow(px_low_df)), ] +
+               w_open5 * open_df[-c(nrow(open_df) - 3,nrow(open_df) - 2,nrow(open_df) - 1,nrow(open_df)), ] +
+               w_close5 * last_price_df[-c(nrow(last_price_df) - 3,nrow(last_price_df) - 2,nrow(last_price_df) - 1,nrow(last_price_df)), ]
+                
+
+#convert first 4 row NA
+price[c(1,2,3,4),] <- NA
+  
+# Display the resulting price data frame
+print(price)
+
+```
+
+
+```{r}
+
+# Initialize a blank data frame for the result
+return <- as.data.frame(matrix(0, nrow = nrow(px_high_df) - 1, ncol = ncol(px_high_df)))
+colnames(return) <- colnames(px_high_df)
+
+# Perform the calculation using vectorized operations
+return[-1, ] <- 100 * ((last_price_df[-(1:2), ] - price[-c(1, nrow(price)), ]) / price[-c(1, nrow(price)),  ])
+
+#add 0 row
+return <- rbind(0, return)
+
+#replace Inf with NA
+return[sapply(return, is.infinite)] <- NA
+
+#replace first 5 rows as NA
+
+return[c(1,2,3,4,5),] <- NA
+
+# Display the resulting return data frame
+print(return)
+
+
+```
+
+
+
+
+
+
+
+```{r}
+signal_volume <- as.data.frame(matrix(0, nrow = nrow(volume_df), ncol = ncol(volume_df)))
+colnames(signal_volume) <- colnames(volume_df)
+
+Volume_days <- 1
+
+# Initialize signal_volume with the same dimensions as volume_df
+signal_volume <- volume_df
+
+# Compute cumulative sums based on the Volume_days
+if (Volume_days == 1) {
+  signal_volume <- volume_df
+  
+ } else if (Volume_days == 2) {
+  signal_volume[-1, ] <- volume_df[-1, ] + volume_df[-nrow(volume_df), ]
+  
+ } else if (Volume_days == 3) {
+  signal_volume[-c(1, 2), ] <- volume_df[-c(1, 2), ] + volume_df[-c(1, nrow(volume_df)), ] + volume_df[-c(nrow(volume_df), nrow(volume_df)-1), ]
+  
+ } else if (Volume_days == 4) {
+  signal_volume[-c(1, 2, 3), ] <- volume_df[-c(1, 2, 3), ] + volume_df[-c(1,2,nrow(volume_df)), ] + volume_df[-c(1, nrow(volume_df), nrow(volume_df)-1), ] + volume_df[-c(nrow(volume_df), nrow(volume_df)-1, nrow(volume_df)-2), ]
+  
+ } else if (Volume_days == 5) {
+  signal_volume[-c(1, 2, 3, 4), ] <- volume_df[-c(1, 2, 3, 4), ] + volume_df[-c(1,2,3,nrow(volume_df)), ] + volume_df[-c(1,2,nrow(volume_df), nrow(volume_df)-1), ] + volume_df[-c(1,nrow(volume_df), nrow(volume_df)-1, nrow(volume_df)-2), ] + volume_df[-c(nrow(volume_df), nrow(volume_df)-1, nrow(volume_df)-2, nrow(volume_df)-3), ]
+}
+
+
+
+
+print(signal_volume)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+# Initialize a blank data frame for the result
+signal <- as.data.frame(matrix(0, nrow = nrow(px_high_df), ncol = ncol(px_high_df)))
+colnames(signal) <- colnames(px_high_df)
+
+# Perform the calculation using vectorized operations
+signal[-(1:2), ] <- (10000000 * return[-(1:2), ]) / (last_price_df[-(1:2), ] * signal_volume[-(1:2), ])
+
+
+# #replace Inf with NA
+# signal[sapply(signal, is.infinite)] <- NA
+
+
+# Display the resulting signal data frame
+print(signal)
+```
+
+
+
+```{r}
+# Initialize a blank data frame for the result
+close_close_return <- as.data.frame(matrix(0, nrow = nrow(px_high_df), ncol = ncol(px_high_df)))
+colnames(close_close_return) <- colnames(px_high_df)
+
+# Handle the first row by setting it to NA (or some other initial value if needed)
+close_close_return[1, ] <- NA
+
+# Perform the calculation using vectorized operations
+close_close_return[-1, ] <- 100 * ((last_price_df[-1, ] - last_price_df[-nrow(last_price_df), ]) / last_price_df[-nrow(last_price_df), ])
+
+#replace Inf with NA
+close_close_return[sapply(close_close_return, is.infinite)] <- NA
+
+
+# Display the resulting close_close_return data frame
+print(close_close_return)
+
+
+
+
+```
+
+
+
+
+```{r}
+
+# Initialize a blank data frame for the result
+buy <- as.data.frame(matrix(0, nrow = nrow(px_high_df), ncol = ncol(px_high_df)))
+colnames(buy) <- colnames(px_high_df)
+
+# Retrieve the BuyMax parameter value
+buy_max <- as.numeric(parameters$Value[parameters$Parameter == "BuyMax"])
+
+# Perform the calculation using vectorized operations
+buy[3:nrow(px_high_df), ] <- ifelse(signal[3:nrow(px_high_df), ] < buy_max, 1, 0)
+
+
+
+
+print(buy)
+
+```
+
+
+
+
+```{r}
+
+
+# Initialize a blank data frame for the result
+sell <- as.data.frame(matrix(0, nrow = nrow(px_high_df), ncol = ncol(px_high_df)))
+colnames(sell) <- colnames(px_high_df)
+
+# Retrieve the SellMin parameter value
+sell_min <- as.numeric(parameters$Value[parameters$Parameter == "SellMin"])
+
+# Perform the calculation using vectorized operations
+sell[3:nrow(px_high_df), ] <- ifelse(signal[3:nrow(px_high_df), ] > sell_min, 1, 0)
+
+
+
+
+
+print(sell)
+
+```
+
+
+
+```{r}
+
+# Initialize the PNL data frame with a Long_Return column
+PNL <- data.frame(Long_Return = numeric(nrow(buy)),
+                  Short_Return = numeric(nrow(buy)),
+                  Strategy_Return = numeric(nrow(buy)))
+
+# Perform the calculation using vectorized operations, starting from the 3rd row
+buy_sum <- rowSums(buy[3:nrow(buy), ],na.rm = TRUE)
+sell_sum <- rowSums(sell[3:nrow(buy), ], na.rm=TRUE)
+
+# # Avoid division by zero by replacing zeros in buy_sum and sell_sum with NA
+# buy_sum[buy_sum == 0] <- NA
+# sell_sum[sell_sum == 0] <- NA
+
+PNL$Long_Return[3:(nrow(buy) - 1)] <- rowSums(buy[3:(nrow(buy) - 1), ] * close_close_return[4:nrow(close_close_return), ], na.rm = TRUE) / rowSums(buy[3:nrow(buy), ],na.rm = TRUE)
+
+
+PNL$Short_Return[3:(nrow(buy) - 1)] <- rowSums(sell[3:(nrow(buy) - 1), ] * close_close_return[4:nrow(close_close_return), ],na.rm = TRUE) / rowSums(sell[3:nrow(buy), ], na.rm=TRUE)
+
+
+PNL$Strategy_Return[3:(nrow(buy) - 1)] <- PNL$Long_Return[3:(nrow(buy) - 1)] - PNL$Short_Return[3:(nrow(buy) - 1)]
+
+# Remove the first two and the last row from the PNL data frame
+PNL <- PNL[-c(1, 2, nrow(PNL)), ]
+
+
+#convert first 3 rows NA
+
+# Display the resulting PNL data frame
+print(PNL)
+
+```
+
+
+
+
+```{r}
+
+# Assuming PNL$Strategy_Return is already defined
+
+# Calculate the Sharpe ratio
+Sharpe_ratio <- 16 * mean(PNL$Strategy_Return, na.rm = TRUE) / sd(PNL$Strategy_Return, na.rm = TRUE)
+
+# Print the average daily return
+cat("average daily return:", mean(PNL$Strategy_Return, na.rm = TRUE), "\n")
+
+# Print the st deviation
+cat("st deviation is:", sd(PNL$Strategy_Return, na.rm = TRUE), "\n")
+
+# Print the Sharpe ratio
+cat("Sharpe Ratio is:", Sharpe_ratio, "\n")
+
+# Print the Annual win probability
+cat("Annual Win probability:", pnorm(Sharpe_ratio), "\n")
+
+```
+

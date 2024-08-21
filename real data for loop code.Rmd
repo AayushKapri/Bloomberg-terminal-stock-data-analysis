@@ -1,0 +1,620 @@
+---
+title: "newcode"
+author: "Aayush"
+date: "2024-07-08"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+
+
+```{r}
+library(pacman)
+pacman::p_load(tidyverse,readxl)
+
+
+# Read two Excel files, with equity names and without equity names inorder for R to read date columns properly
+file_path_equity <- "C:\\Users\\Aayush\\Documents\\dr. moore stock project\\DailyDataV1.csv"
+file_path_no_equity <- "C:\\Users\\Aayush\\Documents\\dr. moore stock project\\fakedata_no_equity_row.xlsx"
+
+data_equity <- read_csv(file_path_equity, col_names = FALSE)
+data_no_equity <- read_excel(file_path_no_equity)
+
+# Extract the equity names from the first row (excluding the first column which is Dates)
+equity_names <- as.character(data_equity[1, -1])
+equity_names <- na.omit(equity_names)
+
+# Extract the common Dates column and the data excluding the first two rows (equity names and column headers)
+dates <- data_no_equity[, 1]
+data_equity <- data_equity[-c(1, 2), -1]
+
+# Initialize a list to store dataframes for each equity
+equity_dfs <- list()
+
+# Number of columns per equity (excluding the Dates column)
+columns_per_equity <- 5
+
+
+# Initialize lists to store the separate dataframes
+open_df <- data.frame(Dates = dates)
+last_price_df <- data.frame(Dates = dates)
+px_high_df <- data.frame(Dates = dates)
+px_low_df <- data.frame(Dates = dates)
+volume_df <- data.frame(Dates = dates)
+
+
+
+# Loop through each equity and create separate dataframes
+for (i in 1:length(equity_names)) {
+  start_col <- (i - 1) * columns_per_equity + 1
+  end_col <- start_col + columns_per_equity - 1
+  
+  equity_data <- data_equity[, start_col:end_col]
+  equity_data <- cbind(dates, equity_data)
+  colnames(equity_data) <- c("Dates", "OPEN", "LAST_PRICE", "PX_HIGH_ALL_SESSION", "PX_LOW_ALL_SESSION", "VOLUME")
+  
+  # Convert relevant columns to numeric
+  equity_data$OPEN <- as.numeric(equity_data$OPEN)
+  equity_data$LAST_PRICE <- as.numeric(equity_data$LAST_PRICE)
+  equity_data$PX_HIGH_ALL_SESSION <- as.numeric(equity_data$PX_HIGH_ALL_SESSION)
+  equity_data$PX_LOW_ALL_SESSION <- as.numeric(equity_data$PX_LOW_ALL_SESSION)
+  equity_data$VOLUME <- as.numeric(equity_data$VOLUME)
+  
+  # Ensure there are no missing values in the subsetting operations
+  # Replace rows where Volume is less than or equal to 0 with NA (excluding Dates)
+  equity_data[!is.na(equity_data$VOLUME) & equity_data$VOLUME <= 0, 2:6] <- NA
+  
+  # Replace rows where PX_HIGH_ALL_SESSION is less than PX_LOW_ALL_SESSION with NA (excluding Dates)
+  equity_data[!is.na(equity_data$PX_HIGH_ALL_SESSION) & !is.na(equity_data$PX_LOW_ALL_SESSION) & 
+                equity_data$PX_HIGH_ALL_SESSION < equity_data$PX_LOW_ALL_SESSION, 2:6] <- NA
+  
+  # Replace rows where PX_HIGH_ALL_SESSION / LAST_PRICE > 1.9 with NA (excluding Dates)
+  equity_data[!is.na(equity_data$PX_HIGH_ALL_SESSION) & !is.na(equity_data$LAST_PRICE) & 
+                (equity_data$PX_HIGH_ALL_SESSION / equity_data$LAST_PRICE) > 1.9, 2:6] <- NA
+  
+  # Replace rows where LAST_PRICE / PX_LOW_ALL_SESSION < 1.9 with NA (excluding Dates)
+  equity_data[!is.na(equity_data$LAST_PRICE) & !is.na(equity_data$PX_LOW_ALL_SESSION) & 
+                (equity_data$LAST_PRICE / equity_data$PX_LOW_ALL_SESSION) > 1.9, 2:6] <- NA
+  
+  # Add the relevant columns to the respective dataframes
+  open_df[[equity_names[i]]] <- equity_data$OPEN
+  last_price_df[[equity_names[i]]] <- equity_data$LAST_PRICE
+  px_high_df[[equity_names[i]]] <- equity_data$PX_HIGH_ALL_SESSION
+  px_low_df[[equity_names[i]]] <- equity_data$PX_LOW_ALL_SESSION
+  volume_df[[equity_names[i]]] <- equity_data$VOLUME
+  
+  # Assign the dataframe to a variable with the name of the equity
+  assign(equity_names[i], equity_data)
+}
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+library(pacman)
+pacman::p_load(tidyverse)
+
+
+#calculate required values for the actuak stock dataset using previous codes
+# Load the Excel file
+parameter_file_path <- 'LiquidityTestsV1.xlsx'
+parameter <- read_excel(parameter_file_path, sheet = 'Sheet1')
+```
+
+
+```{r}
+#dropping date column for all dataframes
+
+
+# Assuming px_high_df, px_low_df, open_df, last_price_df are predefined data frames with columns
+
+# Remove the first column from px_high_df
+px_high_df <- px_high_df[, -1]
+
+# Remove the first column from px_low_df
+px_low_df <- px_low_df[, -1]
+
+# Remove the first column from open_df
+open_df <- open_df[, -1]
+
+# Remove the first column from last_price_df
+last_price_df <- last_price_df[, -1]
+
+# Remove the first column from volume_df
+volume_df <- volume_df[, -1]
+
+```
+
+
+```{r}
+#get number of columns in the parameters dataframe
+num_cols <- ncol(parameter)
+
+
+# Initialize an empty list to store the 40 different parameters
+parameters_list <- list()
+
+
+
+# Loop through the columns starting from the second column to the last column for 40 different parameters in order to create 40 different dataframes
+for (col in 2:num_cols) {
+  # Select the first column and the current column in the loop
+  selected_columns <- parameter[, c(1, col)]
+  
+  # Create a name for the subset
+  subset_name <- paste("parameters_subset_", col - 1, sep="")
+  
+  # Store the subset in the list with the created name
+  parameters_list[[subset_name]] <- selected_columns
+}
+
+
+
+```
+
+
+
+
+```{r}
+ # Assuming px_high_df, px_low_df, open_df, last_price_df are predefined data frames with numeric columns
+
+ # Initialize a blank dataframe for the result
+ price_df <- as.data.frame(matrix(0, nrow=nrow(px_high_df), ncol=ncol(px_high_df)))
+ colnames(price_df) <- colnames(px_high_df)
+
+ # Create an empty list to store the resulting dataframes
+ subset_data_price <- list()
+
+ # Perform the calculation for each parameter dataframe in parameters_list
+ for (i in seq_along(parameters_list)) {
+   # Get the current parameters dataframe
+   current_parameters <- parameters_list[[i]]
+
+   # Loop through each row, starting from the second row
+   for (row in 2:nrow(px_high_df)) {
+    # Initialize row result
+     row_result <- numeric(ncol(px_high_df))
+    
+     # Assuming current_parameters and px_high_df are defined, and 'i' is the iteration index
+    column_name <- paste0("Value", i)
+
+
+     # Calculate each column of price_df[row, ]
+     row_result <- row_result +
+       current_parameters[[column_name]][current_parameters$Parameter == "WeightHigh1"] * as.numeric(px_high_df[row, ])+
+       current_parameters[[column_name]][current_parameters$Parameter == "WeightLow1"] * as.numeric(px_low_df[row, ])+
+       current_parameters[[column_name]][current_parameters$Parameter == "WeightOpen1"] * as.numeric(open_df[row, ])+
+       current_parameters[[column_name]][current_parameters$Parameter == "WeightClose1"] * as.numeric(last_price_df[row, ])+
+       current_parameters[[column_name]][current_parameters$Parameter == "WeightHigh2"] * as.numeric(px_high_df[row-1, ])+
+       current_parameters[[column_name]][current_parameters$Parameter == "WeightLow2"] * as.numeric(px_high_df[row-1, ])+
+       current_parameters[[column_name]][current_parameters$Parameter == "WeightOpen2"] * as.numeric(px_high_df[row-1, ])+
+       current_parameters[[column_name]][current_parameters$Parameter == "WeightClose2"] * as.numeric(px_high_df[row-1, ])
+
+
+     # Assign the calculated row_result to price_df[row, ]
+     price_df[row, ] <- row_result
+   }
+
+   # Set the first row to NA to indicate it's intentionally left empty
+   price_df[1, ] <- NA
+
+   # Store the result in the list with a descriptive name
+   subset_data_price[[paste("Price_df_", i, sep="")]] <- price_df
+ }
+```
+
+
+
+
+```{r}
+# Initialize a list to store the result data frames
+subset_data_return <- list()
+
+# Perform the calculation for each price_df
+for (i in 1:length(subset_data_price)) {
+  price_df <- subset_data_price[[i]]
+  
+  # Initialize a blank data frame for the result
+  return_df <- as.data.frame(matrix(0, nrow=nrow(px_high_df)-1, ncol=ncol(px_high_df)))
+  colnames(return_df) <- colnames(px_high_df)
+  
+  # Perform the calculation for each row
+  for (j in 3:nrow(px_high_df)) {
+    return_df[j, ] <- 100 * (((last_price_df[j, ]) - px_high_df[j-1, ]) / px_high_df[j-1, ])
+  }
+  
+  # Store the result in the list with a descriptive name
+  subset_data_return[[paste("Return_df_", i, sep="")]] <- return_df
+}
+
+```
+
+
+
+```{r}
+# Initialize a list to store the result data frames for signals
+subset_data_signal <- list()
+
+# Perform the calculation for each price_df and corresponding return_df
+for (i in 1:length(subset_data_return)) {
+  return_df <- subset_data_return[[i]]
+
+  
+  # Initialize a blank data frame for the signal result
+  signal_df <- as.data.frame(matrix(0, nrow=nrow(px_high_df)-1, ncol=ncol(px_high_df)))
+  colnames(signal_df) <- colnames(px_high_df)
+  
+  # Perform the calculation for each row
+  for (j in 3:nrow(px_high_df)) {
+    signal_df[j, ] <- (10000000 * return_df[j,]) / (last_price_df[j, ] * volume_df[j, ])
+  }
+  
+  # Store the result in the list with a descriptive name
+  subset_data_signal[[paste("Signal_df_", i, sep="")]] <- signal_df
+}
+
+
+
+```
+
+
+
+
+
+
+
+```{r}
+
+
+# Initialize a list to store the result data frames for closeclosereturn
+subset_data_closeclosereturn <- list()
+
+# Perform the calculation for each price_df and corresponding signal_df
+for (i in 1:length(subset_data_signal)) {
+  signal_df <- subset_data_signal[[i]]
+  
+  # Initialize a blank data frame for the closeclosereturn result
+  closeclosereturn_df <- as.data.frame(matrix(0, nrow=nrow(px_high_df)-1, ncol=ncol(px_high_df)))
+  colnames(closeclosereturn_df) <- colnames(px_high_df)
+  
+  # Perform the calculation for each row
+  for (j in 2:nrow(px_high_df)) {
+    closeclosereturn_df[j, ] <- 100 * ((as.numeric(last_price_df[j, ]) - as.numeric(last_price_df[j-1, ])) / as.numeric(last_price_df[j-1, ]))
+  }
+  
+  # Store the result in the list with a descriptive name
+  subset_data_closeclosereturn[[paste("closeclosereturn_df_", i, sep="")]] <- closeclosereturn_df
+}
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+
+
+  # Initialize a blank dataframe for the result
+buy_df <- as.data.frame(matrix(0, nrow=nrow(px_high_df), ncol=ncol(px_high_df)))
+colnames(buy_df) <- colnames(px_high_df)
+
+# Create an empty list to store the resulting dataframes
+subset_data_buy <- list()
+
+# Perform the calculation for each parameter dataframe in parameters_list
+for (i in seq_along(parameters_list)) {
+  # Get the current parameters dataframe
+  current_parameters <- parameters_list[[i]]
+  
+  
+  # Loop through each row, starting from the third row
+  for (row in 3:nrow(px_high_df)) {
+    # Initialize row result
+    row_result_buy <- numeric(ncol(px_high_df))
+    
+    # Assuming current_parameters and px_high_df are defined, and 'i' is the iteration index
+    column_name <- paste0("Value", i)
+    
+    # Calculate each column of buy_df[row, ]
+    row_result_buy <- row_result_buy + ifelse(signal_df[row, ] < 
+      current_parameters[[column_name]][current_parameters$Parameter == "Buy Max"], 1, 0)
+    
+    # Assign the calculated row_result to buy_df[row, ]
+    buy_df[row, ] <- row_result_buy
+  }
+  
+  # Store the result in the list with a descriptive name
+  subset_data_buy[[paste("Buy_df_", i, sep="")]] <- buy_df
+}
+
+
+
+```
+
+
+
+
+
+```{r}
+
+  # Initialize a blank dataframe for the result
+sell_df <- as.data.frame(matrix(0, nrow=nrow(px_high_df), ncol=ncol(px_high_df)))
+colnames(sell_df) <- colnames(px_high_df)
+
+# Create an empty list to store the resulting dataframes
+subset_data_sell <- list()
+
+# Perform the calculation for each parameter dataframe in parameters_list
+for (i in seq_along(parameters_list)) {
+  # Get the current parameters dataframe
+  current_parameters <- parameters_list[[i]]
+  
+  
+  # Loop through each row, starting from the third row
+  for (row in 3:nrow(px_high_df)) {
+    # Initialize row result
+    row_result_sell <- numeric(ncol(px_high_df))
+    
+    # Assuming current_parameters and px_high_df are defined, and 'i' is the iteration index
+    column_name <- paste0("Value", i)
+    
+    # Calculate each column of buy_df[row, ]
+    row_result_sell <- row_result_sell + ifelse(signal_df[row, ] < 
+      current_parameters[[column_name]][current_parameters$Parameter == "Sell Min"], 1, 0)
+    
+    # Assign the calculated row_result to buy_df[row, ]
+    sell_df[row, ] <- row_result_sell
+  }
+  
+  # Store the result in the list with a descriptive name
+  subset_data_sell[[paste("Sell_df_", i, sep="")]] <- sell_df
+}
+
+
+
+
+```
+
+
+
+
+
+
+
+
+```{r}
+
+
+# Initialize a list to store the result data frames for PNL
+subset_data_PNL <- list()
+
+# Perform the calculation for each price_df and corresponding signal_df
+for (i in 1:length(subset_data_buy)) {
+  closeclosereturn_df <- subset_data_closeclosereturn[[i]]
+  sell_df <- subset_data_sell[[i]]
+  buy_df <- subset_data_buy[[i]]
+  
+  # Initialize the PNL data frame with Long_Return, Short_Return, and Strategy_Return columns
+  PNL <- data.frame(
+    Long_Return = numeric(nrow(buy_df)),
+    Short_Return = numeric(nrow(buy_df)),
+    Strategy_Return = numeric(nrow(buy_df))
+  )
+  
+  # Perform the calculation for each row
+  for (j in 3:nrow(buy_df)) {
+    PNL$Long_Return[j] <- sum(buy_df[j, ] * closeclosereturn_df[j+1, ]) / sum(buy_df[j, ])
+    PNL$Short_Return[j] <- sum(sell_df[j, ] * closeclosereturn_df[j+1, ]) / sum(sell_df[j, ])
+    PNL$Strategy_Return[j] <- PNL$Long_Return[j] - PNL$Short_Return[j]
+  }
+  
+  # Remove the first two and the last row from the PNL data frame
+PNL <- PNL[-c(1, 2, nrow(PNL)), ]
+  
+  # Store the result in the list with a descriptive name
+  subset_data_PNL[[paste("PNL_df_", i, sep = "")]] <- PNL
+}
+
+
+```
+
+
+
+
+```{r}
+# Initialize a list to store the result data frames for PNL
+subset_data_PNL <- list()
+
+# Perform the calculation for each price_df and corresponding signal_df
+for (i in 1:length(subset_data_buy)) {
+  closeclosereturn_df <- subset_data_closeclosereturn[[i]]
+  sell_df <- subset_data_sell[[i]]
+  buy_df <- subset_data_buy[[i]]
+  
+  # Initialize the PNL data frame with Long_Return, Short_Return, and Strategy_Return columns
+  PNL <- data.frame(
+    Long_Return = numeric(nrow(buy_df)),
+    Short_Return = numeric(nrow(buy_df)),
+    Strategy_Return = numeric(nrow(buy_df))
+  )
+  
+  # Perform the calculation for each row
+  for (j in 3:nrow(buy_df)) {
+    # Calculate Long_Return
+    if (sum(buy_df[j, ]) != 0) {
+      PNL$Long_Return[j] <- sum(buy_df[j, ] * closeclosereturn_df[j+1, ]) / sum(buy_df[j, ])
+    } else {
+      PNL$Long_Return[j] <- 0  # Handle division by zero
+    }
+    
+    # Calculate Short_Return
+    if (sum(sell_df[j, ]) != 0) {
+      PNL$Short_Return[j] <- sum(sell_df[j, ] * closeclosereturn_df[j+1, ]) / sum(sell_df[j, ])
+    } else {
+      PNL$Short_Return[j] <- 0  # Handle division by zero
+    }
+    
+    # Calculate Strategy_Return
+    PNL$Strategy_Return[j] <- PNL$Long_Return[j] - PNL$Short_Return[j]
+  }
+  
+  # Remove the first two and the last row from the PNL data frame
+PNL <- PNL[-c(1, 2, nrow(PNL)), ]
+
+  # Store the result in the list with a descriptive name
+  subset_data_PNL[[paste("PNL_df_", i, sep = "")]] <- PNL
+}
+
+```
+
+
+```{r}
+
+# # Initialize a matrix to store comparison results
+# n <- length(subset_data_sell)
+# comparison_matrix <- matrix(FALSE, nrow = n, ncol = n)
+# rownames(comparison_matrix) <- colnames(comparison_matrix) <- names(subset_data_sell)
+# 
+# # List to store cell differences
+# cell_differences <- list()
+# 
+# # Loop through each pair of data frames and compare them
+# for (i in 1:(n-1)) {
+#   for (j in (i+1):n) {
+#     if (identical(subset_data_sell[[i]], subset_data_sell[[j]])) {
+#       comparison_matrix[i, j] <- TRUE
+#       comparison_matrix[j, i] <- TRUE # Symmetric matrix
+#     } else {
+#       # Find cell differences
+#       diff_cells <- which(subset_data_sell[[i]] != subset_data_sell[[j]], arr.ind = TRUE)
+#       cell_differences[[paste(names(subset_data_sell)[i], names(subset_data_sell)[j], sep = "_vs_")]] <- diff_cells
+#     }
+#   }
+# }
+# 
+# # Print the comparison matrix
+# print(comparison_matrix)
+# 
+# # Print the cell differences
+# print(cell_differences)
+```
+
+
+
+
+
+```{r}
+# 
+# # Initialize a list to store the result data frames for PNL
+# subset_data_PNL <- list()
+# 
+# # Perform the calculation for each price_df and corresponding signal_df
+# for (i in 1:length(subset_data_buy)) {
+#   closeclosereturn_df <- subset_data_closeclosereturn[[i]]
+#   sell_df <- subset_data_sell[[i]]
+#   buy_df <- subset_data_buy[[i]]
+#   
+#   # Initialize the PNL data frame with Long_Return, Short_Return, and Strategy_Return columns
+#   PNL <- data.frame(
+#     Long_Return = numeric(nrow(buy_df)),
+#     Short_Return = numeric(nrow(buy_df)),
+#     Strategy_Return = numeric(nrow(buy_df))
+#   )
+#   
+#   # Initialize vectors to store rows with zero sum
+#   zero_sum_buy <- character(0)
+#   zero_sum_sell <- character(0)
+#   
+#   # Perform the calculation for each row
+#   for (j in 3:nrow(buy_df)) {
+#     # Calculate Long_Return
+#     if (sum(buy_df[j, ]) != 0) {
+#       PNL$Long_Return[j] <- sum(buy_df[j, ] * closeclosereturn_df[j+1, ]) / sum(buy_df[j, ])
+#     } else {
+#       PNL$Long_Return[j] <- 0  # Handle division by zero or zero sum
+#       zero_sum_buy <- c(zero_sum_buy, as.character(j))  # Store row index with zero sum
+#     }
+#     
+#     # Calculate Short_Return
+#     if (sum(sell_df[j, ]) != 0) {
+#       PNL$Short_Return[j] <- sum(sell_df[j, ] * closeclosereturn_df[j+1, ]) / sum(sell_df[j, ])
+#     } else {
+#       PNL$Short_Return[j] <- 0  # Handle division by zero or zero sum
+#       zero_sum_sell <- c(zero_sum_sell, as.character(j))  # Store row index with zero sum
+#     }
+#     
+#     # Calculate Strategy_Return
+#     PNL$Strategy_Return[j] <- PNL$Long_Return[j] - PNL$Short_Return[j]
+#   }
+#   
+#   # Store the result in the list with a descriptive name
+#   subset_data_PNL[[paste("PNL_df_", i, sep = "")]] <- PNL
+#   
+#   # Print rows in buy_df and sell_df with zero sum
+#   cat("Rows in buy_df with zero sum for PNL_df_", i, ": ", paste(zero_sum_buy, collapse = ", "), "\n")
+#   cat("Rows in sell_df with zero sum for PNL_df_", i, ": ", paste(zero_sum_sell, collapse = ", "), "\n")
+# }
+
+
+```
+
+
+
+```{r}
+#calculating sharperatio
+
+
+# Initialize a list to store the result data frames for PNL
+subset_data_sharperatio <- list()
+
+# Perform the calculation for each price_df and corresponding signal_df
+for (i in 1:length(subset_data_PNL)) {
+  PNL_df <- subset_data_PNL[[i]]
+
+  
+Sharpe_ratio <- (16 * mean(PNL_df$Strategy_Return, na.rm = TRUE) / sd(PNL_df$Strategy_Return, na.rm = TRUE))
+  
+  # Store the result in the list with a descriptive name
+  subset_data_sharperatio[[paste("Sharperatio_df_", i, sep = "")]] <- Sharpe_ratio
+}
+```
+
+
+
+
+
+
+
+
+
+
